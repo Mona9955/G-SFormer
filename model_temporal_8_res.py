@@ -26,7 +26,6 @@ class Encoder(nn.Module):
         self.pos_embedding_2 = nn.Parameter(torch.randn(1, seq_len, d_model_ls[1]))
         self.pos_embedding_3 = nn.Parameter(torch.randn(1, seq_len, d_model_ls[2]))
         self.pos_embedding_4 = nn.Parameter(torch.randn(1, seq_len, d_model_ls[2]))
-        # self.norm = LayerNorm(layer.size)
 
     def forward(self, x, mask):
         for i, layer in enumerate(self.layers):
@@ -97,21 +96,17 @@ class SublayerConnection(nn.Module):
         self.norm = LayerNorm(size_in)
         self.trans = None if size_in==size_out else nn.Linear(size_in, size_out)
         self.dropout = DropPath(dropout)
-        # self.dropout = nn.Dropout(dropout)
         self.stride = stride
         self.pooling = nn.MaxPool1d(1, stride)
-        # self.norm1 = LayerNorm(size_out)
 
     def forward(self, x, sublayer):
         res = x
         if self.stride != 1:
             res = self.pooling(x.permute(0,2,1).contiguous())
             res = res.permute(0,2,1)
-            # return res + self.dropout(sublayer(self.norm(x)))
+        
         if self.trans:
             res = self.trans(res)
-            # res = self.norm1(res)
-
         return res + self.dropout(sublayer(self.norm(x)))
 
 
@@ -166,89 +161,8 @@ class MultiHeadedAttention(nn.Module):
         x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
         return self.linears[-1](x)
 
-# n, t, dim  -> n,t/3, dim
-class DepthWiseConv(nn.Module):
-    def __init__(self, in_channel, out_channel):
-        super(DepthWiseConv, self).__init__()
 
-        # 逐通道卷积
-        self.depth_conv = nn.Conv1d(in_channels=in_channel,
-                                    out_channels=in_channel,
-                                    kernel_size=3,
-                                    stride=1,
-                                    padding=1,
-                                    groups=in_channel)
-        # groups是一个数，当groups=in_channel时,表示做逐通道卷积
-
-        # 逐点卷积
-        self.point_conv = nn.Conv1d(in_channels=in_channel,
-                                    out_channels=out_channel,
-                                    kernel_size=1,
-                                    stride=1,
-                                    padding=0,
-                                    groups=1)
-        self.dropout = nn.Dropout(0.1)
-        self.gelu = nn.ReLU()
-
-    def forward(self, input, nonl=True):
-        input = input.permute(0,2,1)
-        out = self.depth_conv(input)
-        if nonl:
-            out = self.dropout(self.gelu(out))
-        out = self.point_conv(out)
-        out = out.permute(0,2,1)
-        return out
-
-# input: bs, t, c
-class Super_MHAT(nn.Module):
-    def __init__(self, h, d_model, dropout = 0.1, M=9, kernal=5, n_iter=1):
-        super(Super_MHAT, self).__init__()
-        self.m = M
-        self.n_iter = n_iter
-        self.kernal = kernal
-        self.eps = 1e-12
-        self.h = h
-        self.d_k = d_model // h
-        self.linears = clones(nn.Linear(d_model, d_model), 4)
-        self.dropout = nn.Dropout(p=dropout) if dropout != 0. else None
-
-
-    def forward(self, x, mask=None):
-        N, T, C = x.shape
-        scale = C ** -0.5
-        pad = (self.kernal-1)//2
-        T_ = T // self.m
-        tokens = x.view(N, T_, self.m, C)  #n, t/9, 9, c
-        stokens = F.avg_pool1d(x.permute(0,2,1), self.m).unsqueeze(dim=-1)   #b, c, t/9, 1
-        with torch.no_grad:
-            for idx in range(self.n_iter):
-                stokens = F.unfold(stokens, kernel_size=(self.kernal,1), padding=(pad, 0))  #b, c*5, t/9
-                stokens = stokens.transpose(1,2).reshape(N, -1, C, self.kernal)   #n, t/9, c, 5
-                association = tokens @ stokens * scale   #n, t/9, 9, 5
-                association = association.softmax(-1)
-                association_sum = association.sum(2).transpose(1,2).reshape(N, self.kernal, -1)  #n, 5, t/9
-                association_sum = F.fold(association_sum, output_size=(T_, 1), kernel_size=(self.kernal, 1), padding=(pad, 0)).squeeze(dim=-1)   #n, 1, t/9
-
-        stokens = tokens.transpose(-1,-2) @ association  #b, t/9, c, 5
-        stokens = stokens.permute(0,3,2,1).reshape(N, -1, T_)  #b, c*5, t/9
-        stokens = F.fold(stokens, output_size=(T_, 1), kernel_size=(self.kernal, 1), padding=(pad, 0))   #b, c, t/9, 1
-        stokens = stokens.squeeze(dim=-1) /(association_sum + self.eps)
-
-        stokens = stokens.permute(0,2,1)  #b, t/9, c
-        query, key, value = \
-            [l(x).view(N, -1, self.h, self.d_k).transpose(1, 2) for l, x in zip(self.linears, (stokens, stokens, stokens))]  # b, h, t/9, d_k
-        stokens, atten_stoken = attention(query, key, value, mask=mask, dropout=self.dropout)
-        stokens = stokens.transpose(1, 2).contiguous().view(N, -1, self.h * self.d_k)   #b, t/9, c
-        stokens = self.linears[-1](stokens).permute(0,2,1).unsqueeze(dim=-1)  #b, c, t/9, 1
-
-        stokens = F.unfold(stokens, kernel_size=(self.kernal, 1), padding=(pad, 0))
-        stokens = stokens.transpose(1,2).reshape(N, T_, C, self.kernal)
-        tokens = stokens @ association.transpose(-1,-2)   #n, t/9, c, 5     n, t/9, 5, 9  -> n, t/9, c, 9
-        tokens = tokens.transpose(-1, -2).reshape(N, T, C)
-        return tokens
-
-
-# input: bs, t, c
+# input: N, T, C
 class Sparse_MHAT(nn.Module):
     def __init__(self, h, d_model, dropout = 0.1, M=3):
         super(Sparse_MHAT, self).__init__()
@@ -290,7 +204,7 @@ class Sparse_MHAT(nn.Module):
         return sparse_output
 
 
-# input: bs, t, c
+# input: N, T, C
 class Sparse_MHAT_reduce(nn.Module):
     def __init__(self, h, d_model, d_out, dropout=0.1, M=3):
         super(Sparse_MHAT_reduce, self).__init__()
@@ -339,7 +253,7 @@ class Sparse_MHAT_reduce(nn.Module):
 
 
 
-# input = N, T, 2(256/512)
+# input = N, T, 2
 class Transformer(nn.Module):
     def __init__(self, deco_n = 5, d_model=256, d_ff=512, h=8, dropout=0., drop_path_rate=0.1, length=81, depth_wise=False):
         super(Transformer, self).__init__()
