@@ -28,10 +28,10 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
 point = 50
 
 print('Loading h36m dataset...')
-dataset_path = "/data2/cuimengmeng/processed_h36m/data_3d_h36m.npz"
+dataset_path = "/data2/processed_h36m/data_3d_h36m.npz"
 dataset = Human36mDataset(path=dataset_path)
 
-dataset_path_2d = "/data2/cuimengmeng/processed_h36m/data_2d_h36m_cpn_ft_h36m_dbb.npz"
+dataset_path_2d = "/data2/processed_h36m/data_2d_h36m_cpn_ft_h36m_dbb.npz"
 print('Loading 2D detections...')
 keypoints_2d = np.load(dataset_path_2d, allow_pickle=True)
 
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     model = nn.DataParallel(model).cuda()
     model_refine = Refine_Model()
     model_refine = nn.DataParallel(model_refine).cuda()
-    ckpt_dir = "/data1/cuimengmeng/projects/digging_new/ckpt_1/T8_res_abs_amass_refine_0-2024-9-9-10-30/ep_12_bs_8999_41.4122.pth.tar"
+    ckpt_dir = "/data1/projects/gsformer_l_refine.pth.tar"
         
    
     ckpt = torch.load(ckpt_dir)
