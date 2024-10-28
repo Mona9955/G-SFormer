@@ -27,10 +27,10 @@ random.seed(seed)
 np.random.seed(seed)
 
 print('Loading h36m dataset...')
-dataset_path = "/data2/cuimengmeng/processed_h36m/data_3d_h36m.npz"
+dataset_path = "/data2/processed_h36m/data_3d_h36m.npz"
 dataset = Human36mDataset(path=dataset_path)
 
-dataset_path_2d = "/data2/cuimengmeng/processed_h36m/data_2d_h36m_cpn_ft_h36m_dbb.npz"
+dataset_path_2d = "/data2/processed_h36m/data_2d_h36m_cpn_ft_h36m_dbb.npz"
 print('Loading 2D detections...')
 keypoints_2d = np.load(dataset_path_2d, allow_pickle=True)
 
@@ -107,12 +107,12 @@ if __name__ == '__main__':
     model = nn.DataParallel(model).cuda()
 
     if AMASS_pretrain:
-        ckpt_dir = "/data1/cuimengmeng/projects/digging_new/ckpt_1/model_50_t8_res_amass_continue-2024-9-13-11-3/ep_6_bs_5999_42.289.pth.tar"  # AMASS pre-train G-SFormer-L
+        ckpt_dir = "/data1/projects/amass_pretrain_gsformer_l.pth.tar"  # AMASS pre-train G-SFormer-L
         ckpt = torch.load(ckpt_dir)
         model.load_state_dict(ckpt['state_dict'])
 
     else:
-        pre_ckpt_dir = "/data2/cuimengmeng/projects/digging_new/ckpt_1/model_50_t8_res_abs_cpn-2024-7-24-17-56/ep_17_bs_17999_43.2101.pth.tar" #G-SFormer-L
+        pre_ckpt_dir = "/data2/projects/digging_new/gsformer_l.pth.tar" #G-SFormer-L
         pre_ckpt = torch.load(pre_ckpt_dir)['state_dict']
         rm_ls = ['joints_embed']
         state_dict = {k: v for k, v in pre_ckpt.items() if rm_ls[0] not in k}
