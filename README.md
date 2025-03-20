@@ -1,5 +1,5 @@
-# Source code for "Learning Structure-Dynamics-Aware Representations for Efficient and Robust 3D Pose Estimation"
+# Source code for "Learning Pareto-Optimal Models for 3D Human Pose Estimation"
 
-We have uploaded the training and testing code of G-SFormer-L in the ICLR2025 submission "LEARNING STRUCTURE-DYNAMICS-AWARE REPRESENTATIONS FOR EFFICIENT AND ROBUST 3D POSE ESTIMATION".
+We have uploaded the training and testing code of G-SFormer-L in the TMM submission "Learning Pareto-Optimal Models for 3D Human Pose Estimation".
 
 The checkpoints can be downloaded through Google Drive https://drive.google.com/drive/folders/1pKRYlRlBDQeDcpWf61OqvZkebUAJyCu_?usp=sharing.
